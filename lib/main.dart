@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'common/time_util.dart';
+
 void main() {
   runApp(MyApp());
 }
@@ -24,8 +26,11 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   String? _inputData;
+  String? lastRecordedTime;
+
   final _textEditingController = TextEditingController();
   List<String> _dataList = [];
+  Map<String, String> _dataMap = {};
 
   @override
   void dispose() {
@@ -43,6 +48,19 @@ class _MyHomePageState extends State<MyHomePage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _dataList = prefs.getKeys().map((key) => prefs.getString(key)!).toList();
+      lastRecordedTime = prefs.getString("lastRecordedTime");
+      _dataMap = Map.fromIterable(
+        prefs.getKeys().where((key) => key != 'lastRecordedTime'),
+        key: (key) => key,
+        value: (key) => prefs.getString(key)!,
+      );
+      // var key = "2023-05-15";
+      // _dataMap[TimeUtil.getNextDay(key, 1)] = _dataMap[key]! + "0";
+      // _dataMap[TimeUtil.getNextDay(key, 2)] = _dataList.indexOf(key).toString() + "0";
+      // _dataMap[TimeUtil.getNextDay(key, 3)] = _dataList.indexOf(key).toString() + "22";
+      // _dataMap[TimeUtil.getNextDay(key, 4)] = _dataList.indexOf(key).toString() + "23";
+      // _dataMap[TimeUtil.getNextDay(key, 5)] = _dataList.indexOf(key).toString() + "85";
+      _dataMap = Map.fromEntries(_dataMap.entries.toList()..sort((a, b) => b.key.compareTo(a.key)));
     });
   }
 
@@ -84,6 +102,13 @@ class _MyHomePageState extends State<MyHomePage> {
       // 自动收回输入法
       FocusScope.of(context).unfocus();
     }
+
+    final formatter = DateFormat('HH:mm:ss');
+    final formattedTime = formatter.format(DateTime.now());
+    setState(() {
+      lastRecordedTime = formattedTime;
+      prefs.setString("lastRecordedTime", lastRecordedTime!);
+    });
   }
 
   void _incrementCount() {
@@ -152,15 +177,27 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ],
           ),
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text('上次记录时间：${lastRecordedTime}'),
+              ],
+            ),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: ListView.builder(
                 shrinkWrap: true,
-                itemCount: _dataList.length > 3 ? 3 : _dataList.length,
+                itemCount: _dataMap.length,
                 itemBuilder: (BuildContext context, int index) {
-                  final key = DateFormat('MM-dd').format(DateTime.now().subtract(Duration(days: index)));
-                  final existingData = _dataList[index].split(',');
+                  print('aaa'+_dataMap.keys.elementAt(index));
+                  final key = TimeUtil.formatDate(_dataMap.keys.elementAt(index));
+                  final values = _dataMap.values.elementAt(index);
+                  final existingData = values.split(',');
                   int existingMorningValue = int.parse(existingData[0]);
                   int existingAfternoonValue = 0;
                   if (existingData.length > 1) {
@@ -168,7 +205,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   }
                   int total = existingMorningValue + existingAfternoonValue;
                   return Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(key),
                       Text('上:$existingMorningValue'),
@@ -176,10 +214,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       Text('总:$total'),
                       Text('总消耗:${total * 6}千卡', style: TextStyle(color: Colors.pink)),
                     ],
-                  );
-                  return ListTile(
-                    title: Text(key),
-                    subtitle: Text('爬楼层数：' + _dataList[index]),
                   );
                 },
               ),
